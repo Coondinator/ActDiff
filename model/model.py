@@ -1,6 +1,6 @@
 import torch
 from torch import nn, Tensor
-from .model_utils import PositionalEncoding, TimestepEmbedder, FinalLayer
+from .layers import PositionalEncoding, TimestepEmbedder, FinalLayer
 from .attention import DiTBlock
 
 

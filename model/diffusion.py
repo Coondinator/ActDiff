@@ -4,9 +4,8 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from copy import deepcopy
-from .argument import Arguments
-from .model_utils import build_denoiser, build_text_encoder
+
+from .model_utils import build_denoiser, build_img_encoder
 
 from functools import partial
 
@@ -20,7 +19,7 @@ class ActDiff(nn.Module):
         self.latent_channel = args.latent_channel
 
         self.denoiser_model = build_denoiser(args)
-        self.text_encoder = build_text_encoder(args)
+        self.img_encoder = build_img_encoder(args)
 
         self.step = 0
 
