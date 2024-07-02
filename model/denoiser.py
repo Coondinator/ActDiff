@@ -42,7 +42,8 @@ class TransformerModel(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x: Tensor, t: Tensor = None, attn_mask: Tensor = None, text_emb: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, t: Tensor = None, condition: Tensor = None, img = None, point = None,
+                attn_mask: Tensor = None) -> Tensor:
         """
         Arguments:
             src: Tensor, shape ``[seq_len, batch_size]``
@@ -56,7 +57,7 @@ class TransformerModel(nn.Module):
 
         t = self.t_embedder(t)  # (N, D)  # (N, D)
 
-        text_emb = text_emb.squeeze(1)
+        text_emb = condition.squeeze(1)
         text_emb = self.text_embed_proj(text_emb)
         t = t + text_emb
 
@@ -64,3 +65,5 @@ class TransformerModel(nn.Module):
             x = block(x, t, attn_mask)  # (N, T, D)
         x = self.final_layer(x, t)  # (N, T, patch_size ** 2 * out_channels)
         return x
+
+

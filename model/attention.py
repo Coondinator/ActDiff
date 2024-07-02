@@ -7,6 +7,7 @@ import collections.abc
 from functools import partial
 import torch
 from torch import nn, Tensor
+from model.layers import Mlp, modulate
 
 
 def _ntuple(n):
@@ -23,9 +24,6 @@ to_2tuple = _ntuple(2)
 to_3tuple = _ntuple(3)
 to_4tuple = _ntuple(4)
 to_ntuple = _ntuple
-
-
-
 
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False,
@@ -135,4 +133,40 @@ class DiTBlock(nn.Module):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
         x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask)
         x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
+
+class CrossDiTBlock(nn.Module):
+
+    def __init__(self, x_hidden_size, y_hidden_size, num_head, mlp_ratio=4.0):
+        super().__init__()
+        self.num_head = num_head
+        self.norm1 = nn.LayerNorm(x_hidden_size, elementwise_affine=False, eps=1e-6)
+        self.norm2 = nn.LayerNorm(y_hidden_size, elementwise_affine=False, eps=1e-6)
+        self.norm3 = nn.LayerNorm(x_hidden_size, elementwise_affine=False, eps=1e-6)
+        self.cross_attn_1 = nn.MultiheadAttention(x_hidden_size, num_head, kdim=y_hidden_size, vdim=y_hidden_size,
+                                                  dropout=0, batch_first=True)
+        mlp_hidden_dim = int(x_hidden_size * mlp_ratio)
+        approx_gelu = lambda: nn.GELU(approximate="tanh")
+        self.mlp = Mlp(in_features=x_hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
+
+        self.adaLN_modulation_x = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(x_hidden_size, 6 * x_hidden_size, bias=True)
+        )
+        self.adaLN_modulation_y = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(x_hidden_size, 6 * y_hidden_size, bias=True)
+        )
+
+    def forward(self, x, c, y, attn_mask=None):
+        shift_mca_x, scale_mca_x, gate_mca_x, shift_mlp_x, scale_mlp_x, gate_mlp_x = self.adaLN_modulation_x(c).chunk(6, dim=-1)
+        shift_mca_y, scale_mca_y, gate_mca_y, shift_mlp_y, scale_mlp_y, gate_mlp_y = self.adaLN_modulation_y(c).chunk(6, dim=-1)
+        x_norm1 = modulate(self.norm1(x), shift_mca_x, scale_mca_x)
+        y_norm2 = modulate(self.norm2(y), shift_mca_y, scale_mca_y)
+        if attn_mask is not None:
+            attn_mask = attn_mask.repeat(self.num_head, 1, 1)
+        x = x + gate_mca_x.unsqueeze(1) * self.cross_attn_1(x_norm1, y_norm2, y_norm2, attn_mask=attn_mask,
+                                                            key_padding_mask=None, need_weights=False)[0]
+        x = x + gate_mlp_x.unsqueeze(1) * self.mlp(modulate(self.norm3(x), shift_mlp_x, scale_mlp_x))
         return x

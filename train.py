@@ -10,11 +10,9 @@ from torch import nn, einsum
 import torch.nn.functional as F
 from torch.utils.data import dataset, Dataset, DataLoader
 
-
 from dataset.dataset import Action_Dataset
 from argument import Arguments
 from model.diffusion import ActDiff
-
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -59,16 +57,16 @@ def basic_train(model,
         optim.param_groups[0]['lr'] = lrate * (1 - ep / n_epoch)
 
         # pbar = tqdm(train_dataloader)
-        for index, (data, cond) in enumerate(train_dataloader):  # x: images
+        for index, (action, cond, label) in enumerate(train_dataloader):  # x: images
             # latent, text = x[0], x[1]
             optim.zero_grad()
-            data = data.to(device)
+            action = action.to(device)
 
             # perturb data
 
-            noise = torch.randn_like(data)
-            t = torch.randint(0, args.timesteps, (data.shape[0],)).to(device)
-            loss = model(x=data, condition=text, mask=attention_mask, noise=noise, t=t, train_mode=train_mode)
+            noise = torch.randn_like(action)
+            t = torch.randint(0, args.timesteps, (action.shape[0],)).to(device)
+            loss = model(x=action, condition=cond, noise=noise, t=t, train_mode=train_mode)
             acc_train_loss += loss.item()
             loss.backward()
 
@@ -77,12 +75,12 @@ def basic_train(model,
         acc_val_loss = 0
         with torch.no_grad():
             model.eval()
-            for test_data, text in test_dataloader:
-                test_data = test_data.to(device)
+            for test_action, test_cond, test_label in test_dataloader:
+                test_action = test_action.to(device)
                 # attention_mask = generate_attention_mask(test_data)
-                noise = torch.randn_like(test_data)
-                t = torch.randint(0, args.timesteps, (test_data.shape[0],)).to(device)
-                val_loss = model(x=test_data, noise=noise, mask=attention_mask, condition=text, t=t, train_mode=train_mode)
+                noise = torch.randn_like(test_action)
+                t = torch.randint(0, args.timesteps, (test_action.shape[0],)).to(device)
+                val_loss = model(x=test_action, noise=noise, condition=test_cond, t=t, train_mode=train_mode)
                 acc_val_loss += val_loss.item()
                 # print('test_loss:', test_loss.item())
 
@@ -92,14 +90,14 @@ def basic_train(model,
         epoch_time = end_time - start_time
 
         if (ep % 200) == 0:
-            torch.save(model.state_dict(), os.path.join(output_model_path, f'NLDM_noise_{ep}.pt'))
+            torch.save(model.state_dict(), os.path.join(output_model_path, f'ActDiff_xstart_{ep}.pt'))
 
 
         wandb.log({"acc_train_loss": acc_train_loss, "test_loss": acc_val_loss, "epoch_time": epoch_time})
         print('[{:03d}/{}] acc_train_loss: {:.4f}\t test_loss: {:.4f}'.format(
             ep, n_epoch, acc_train_loss, acc_val_loss))
 
-    torch.save(model.state_dict(), os.path.join(output_model_path, f'NLDM_final_noise.pt'))
+    torch.save(model.state_dict(), os.path.join(output_model_path, f'ActDiff_xstart_final.pt'))
     wandb.finish()
 
     # basic_eval(model=ldm_model, nemf_model=nemf_model, fk=fk, prompt=, output_path=output_path)
@@ -130,7 +128,7 @@ def train():
     test_dataset_size = dataset_size - train_dataset_size
 
     train_set, test_set = torch.utils.data.random_split(dataset, [train_dataset_size, test_dataset_size])
-    visual_set, _ = torch.utils.data.random_split(test_set, [3, len(test_set) - 3])
+    # visual_set, _ = torch.utils.data.random_split(test_set, [3, len(test_set) - 3])
 
     train_dataloader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(dataset=test_set, batch_size=batch_size, shuffle=False)
@@ -148,7 +146,7 @@ def train():
 if __name__ == '__main__':
 
     from argparse import ArgumentParser
-    configure_path = 'model_config.yaml'
+    configure_path = 'model.yaml'
 
     parser = ArgumentParser()
     args = Arguments('./model', filename=configure_path)

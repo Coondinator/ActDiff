@@ -1,10 +1,10 @@
 from .cond_emb import ImgEncoder
 
-from .model import TransformerModel
+from .denoiser import TransformerModel
 
 
 
-def build_img_encoder(config):
+def build_cond_encoder(config):
     if config.text_encoder == 'clip':
         module = ImgEncoder(config.img_encoder_path)
     else:
