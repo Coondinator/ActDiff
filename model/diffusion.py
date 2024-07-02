@@ -7,7 +7,6 @@ import torch.nn.functional as F
 
 from .model_utils import build_denoiser, build_cond_encoder
 
-from functools import partial
 
 
 class ActDiff(nn.Module):
