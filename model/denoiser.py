@@ -1,27 +1,29 @@
 import torch
 from torch import nn, Tensor
-from .layers import PositionalEncoding, TimestepEmbedder, FinalLayer
-from .attention import DiTBlock
+from .layers import PositionalEncoding, TimestepEmbedder, FinalLayer, DiTBlock, CrossDiTBlock
 
 
 class TransformerModel(nn.Module):
 
-    def __init__(self, d_model: int, nhead: int, d_hid: int,
-                 nlayers: int, dropout: float = 0.2):
+    def __init__(self, act_dim: int, con_dim: int, nhead: int, hid_dim: int, nlayers: int, dropout: float = 0.2):
         super().__init__()
+        self.act_dim = act_dim + 1  # add one for stop token
+        self.hid_dim = hid_dim
         self.dropout = nn.Dropout(p=dropout)
-        self.pos_encoder = PositionalEncoding(d_hid, dropout)
-        self.t_embedder = TimestepEmbedder(d_hid)
-        self.d_model = d_model
-        self.linear = nn.Linear(d_model, d_hid)
+        self.pos_encoder = PositionalEncoding(hid_dim, dropout)
+
+        self.t_embedder = TimestepEmbedder(self.hid_dim)
+        self.label_embedder = TimestepEmbedder(self.hid_dim)
+
+        self.linear = nn.Linear(self.act_dim, self.hid_dim)
         self.text_embed_proj = nn.Sequential(
-            nn.ReLU(), nn.Linear(768, d_hid))
+            nn.ReLU(), nn.Linear(768, self.hid_dim))
         # self.text_embed_proj = nn.Sequential(nn.ReLU(), nn.Linear(768, h_dim))0
         self.activation = nn.GELU()
         self.blocks = nn.ModuleList([
-            DiTBlock(d_hid, nhead, mlp_ratio=4.0) for _ in range(nlayers)
+            CrossDiTBlock(x_hidden_size=self.hid_dim, y_hidden_size=con_dim, num_head=nhead, mlp_ratio=4.0) for _ in range(nlayers)
         ])
-        self.final_layer = FinalLayer(d_hid, d_model)
+        self.final_layer = FinalLayer(self.hid_dim, self.act_dim)
         self.init_weights()
 
     def init_weights(self) -> None:
@@ -42,8 +44,8 @@ class TransformerModel(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x: Tensor, t: Tensor = None, condition: Tensor = None, img = None, point = None,
-                attn_mask: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, t: Tensor = None, condition: Tensor = None, label: Tensor = None,
+                img = None, point = None, attn_mask: Tensor = None) -> Tensor:
         """
         Arguments:
             src: Tensor, shape ``[seq_len, batch_size]``
@@ -54,15 +56,13 @@ class TransformerModel(nn.Module):
         """
         # x = self.dropout(self.activation(self.linear(x)))
         x = self.pos_encoder(x)  # (N, T, D), where T = H * W / patch_size ** 2
-
+        con_act = self.pos_encoder(condition)
         t = self.t_embedder(t)  # (N, D)  # (N, D)
-
-        text_emb = condition.squeeze(1)
-        text_emb = self.text_embed_proj(text_emb)
-        t = t + text_emb
+        label_emb = self.label_embedder(label)
+        t = t + label_emb
 
         for block in self.blocks:
-            x = block(x, t, attn_mask)  # (N, T, D)
+            x = block(x=x, y=con_act, c=t)  # (N, T, D)
         x = self.final_layer(x, t)  # (N, T, patch_size ** 2 * out_channels)
         return x
 

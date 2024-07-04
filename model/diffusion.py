@@ -116,7 +116,7 @@ class ActDiff(nn.Module):
         else:
             posterior_variance_t = _extract_into_tensor(self.posterior_variance, t, x.shape)
             noise = torch.randn_like(x)
-            return {'sample': p_mean_out['mean'] + torch.sqrt(posterior_variance_t) * noise,
+            return {'sample': p_mean_out['mean'] + torch.sqrt(posterior_variance_t) * noise,  # xt-1
                     'pred_x_start': p_mean_out['x_start']}
 
     def ddpm_sample_loop(self, cond_act, shape, label, cond_extra=None, mask=None):
@@ -124,7 +124,7 @@ class ActDiff(nn.Module):
 
         b = shape[0]
         # start from pure noise (for each example in the batch)
-        latent = torch.randn(shape, device=device)
+        latent = torch.randn(shape, device=device)  # Gaussian Noise
         latents = []
 
         if cond_extra is not None:
@@ -135,7 +135,7 @@ class ActDiff(nn.Module):
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
             out = self.ddpm_sample(x=latent, cond_act=cond_act, mask=mask, label=label,
                                    t=torch.full((b,), i, device=device, dtype=torch.long), t_index=i)
-            latent = out['sample']
+            latent = out['sample']  # xt-1
             latents.append(latent.cpu().numpy())
         return latent, latents
 
@@ -243,7 +243,7 @@ class ActDiff(nn.Module):
         model_output = self.denoiser_model(x=x, t=t, condtion=condtion, attn_mask=mask)
         if self.mean_type == 'x_start':
             x_start = model_output
-            mean, variance = self.q_posterior_mean_variance(x_start, x, t)
+            mean, variance = self.q_posterior_mean_variance(x_start, x, t)  # q(x_{t-1} | x_t, x_0)
         elif self.mean_type == 'noise':
             x_start = self.predict_x_start_from_noise(noise=model_output, x_t=x, t=t)
             mean, variance = self.q_posterior_mean_variance(x_start, x, t)

@@ -5,9 +5,10 @@ img_length: 3
 img_size: 128
 image_cond: False
 
-head_num: 8
-hidden_dim: 512
-num_layers: 6
+act_dim: 20
+head_num: 20
+hid_dim: 20
+nlayers: 4
 dropout: 0.1
 learning_rate: 0.0001
 

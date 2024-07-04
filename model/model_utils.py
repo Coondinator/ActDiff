@@ -15,10 +15,12 @@ def build_cond_encoder(config):
 
 def build_denoiser(config):
     if config.denoiser == 'transformer':
-        module = TransformerModel(d_model=config.latent_size,
+        module = TransformerModel(act_dim=config.act_dim,
+                                  con_dim=config.cond_dim,
                                   nhead=config.denoiser_nhead,
-                                  d_hid=config.latent_size,
-                                  nlayers=config.denoiser_nlayer)
+                                  hid_dim=config.hid_dim,
+                                  nlayers=config.nlayers,
+                                  dropout=config.dropout)
     else:
         raise ValueError("No such denoiser type!")
     return module

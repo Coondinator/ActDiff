@@ -60,8 +60,8 @@ def basic_train(model,
         for index, (action, cond, label) in enumerate(train_dataloader):  # x: images
             # latent, text = x[0], x[1]
             optim.zero_grad()
-            action = action.to(device)
-
+            action = action.to(device)  # [batch, action_length, 16]
+            cond = cond.to(device)  # [batch, cond_length, 16]
             # perturb data
 
             noise = torch.randn_like(action)
