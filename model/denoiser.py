@@ -7,7 +7,7 @@ class TransformerModel(nn.Module):
 
     def __init__(self, act_dim: int, con_dim: int, nhead: int, hid_dim: int, nlayers: int, dropout: float = 0.2):
         super().__init__()
-        self.act_dim = act_dim + 1  # add one for stop token
+        self.act_dim = act_dim
         self.hid_dim = hid_dim
         self.dropout = nn.Dropout(p=dropout)
         self.pos_encoder = PositionalEncoding(hid_dim, dropout)
@@ -35,16 +35,17 @@ class TransformerModel(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
         for block in self.blocks:
-            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
-            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
-
+            nn.init.constant_(block.adaLN_modulation_x[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation_x[-1].bias, 0)
+            nn.init.constant_(block.adaLN_modulation_y[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation_y[-1].bias, 0)
         # Zero-out output layers:
         nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
         nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x: Tensor, t: Tensor = None, condition: Tensor = None, label: Tensor = None,
+    def forward(self, x: Tensor, t: Tensor = None, cond_act: Tensor = None, label: Tensor = None,
                 img = None, point = None, attn_mask: Tensor = None) -> Tensor:
         """
         Arguments:
@@ -56,7 +57,7 @@ class TransformerModel(nn.Module):
         """
         # x = self.dropout(self.activation(self.linear(x)))
         x = self.pos_encoder(x)  # (N, T, D), where T = H * W / patch_size ** 2
-        con_act = self.pos_encoder(condition)
+        con_act = self.pos_encoder(cond_act)
         t = self.t_embedder(t)  # (N, D)  # (N, D)
         label_emb = self.label_embedder(label)
         t = t + label_emb

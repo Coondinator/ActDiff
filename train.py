@@ -62,11 +62,12 @@ def basic_train(model,
             optim.zero_grad()
             action = action.to(device)  # [batch, action_length, 16]
             cond = cond.to(device)  # [batch, cond_length, 16]
+            label = label.to(device)  # [batch, 1]
             # perturb data
 
             noise = torch.randn_like(action)
             t = torch.randint(0, args.timesteps, (action.shape[0],)).to(device)
-            loss = model(x=action, condition=cond, noise=noise, t=t, train_mode=train_mode)
+            loss = model(x=action, cond_act=cond, noise=noise, label=label, t=t)
             acc_train_loss += loss.item()
             loss.backward()
 
@@ -77,10 +78,13 @@ def basic_train(model,
             model.eval()
             for test_action, test_cond, test_label in test_dataloader:
                 test_action = test_action.to(device)
+                test_cond = test_cond.to(device)
+                test_label = test_label.to(device)  # [batch, 1]
+
                 # attention_mask = generate_attention_mask(test_data)
                 noise = torch.randn_like(test_action)
                 t = torch.randint(0, args.timesteps, (test_action.shape[0],)).to(device)
-                val_loss = model(x=test_action, noise=noise, condition=test_cond, t=t, train_mode=train_mode)
+                val_loss = model(x=test_action, noise=noise, cond_act=test_cond, label=test_label, t=t)
                 acc_val_loss += val_loss.item()
                 # print('test_loss:', test_loss.item())
 
@@ -117,7 +121,8 @@ def basic_eval(model,  cond, output_path):
 
 
 def train():
-    dataset = Action_Dataset()
+    data_path = './data/try/pant_blackjean/'
+    dataset = Action_Dataset(dataset_path=data_path, args=args)
     batch_size = 512
     lr = 1e-4
 

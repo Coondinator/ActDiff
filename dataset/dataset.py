@@ -1,7 +1,6 @@
 import ast
 import csv
-
-import numpy
+import os.path
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -55,44 +54,45 @@ class Action_Dataset(Dataset):
         total_act = []
         total_cond = []
         total_lebel = []
-
+        left_path = os.path.join(dataset_path, 'left.csv')
+        right_path = os.path.join(dataset_path, 'right.csv')
         # read all the data, loop
-        left_action = read_tracker_data()
-        right_action = read_tracker_data()
+        left_action = read_tracker_data(left_path)
+        right_action = read_tracker_data(right_path)
         action_clip, cond_clips, label_clips = self.segment_action(left_action, right_action)
         total_act.extend(action_clip)
         total_cond.extend(cond_clips)
         total_lebel.extend(label_clips)
         ###
-        self.action = torch.from_numpy(total_act).to.torch.float32()
-        self.cond_act = torch.from_numpy(total_cond).to.torch.float32()
-        self.label = total_lebel
+        self.action = torch.from_numpy(np.array(total_act))
+        self.cond_act = torch.from_numpy(np.array(total_cond))
+        self.label = torch.from_numpy(np.array(total_lebel).astype(np.float32))
 
         return
     def __len__(self):
-        return
+        return len(self.action)
 
     def segment_action(self, action_left, action_right, label=None):
-        pos_left = action_left['pos']  # (T, 3)
-        pos_right = action_right['pos']  # (T, 3)
+        pos_left = action_left['pos'].astype(np.float32)  # (T, 3)
+        pos_right = action_right['pos'].astype(np.float32)  # (T, 3)
         assert pos_left.shape[0] == pos_right.shape[0]
         pos = np.concatenate((pos_left, pos_right), axis=1)  # (T, 6)
 
-        quat_left = torch.from_numpy(action_left['quat'])  # (T, 4)
+        quat_left = torch.from_numpy(action_left['quat'].astype(np.float32))  # (T, 4)
         rot6d_left = matrix_to_rotation_6d(quaternion_to_matrix(quat_left)).numpy()  # (T, 6)
-        stat_left = action_left['stat']  # (T, 1)
-
-        quat_right = torch.from_numpy(action_right['quat'])
+        stat_left = action_left['stat'].astype(np.float32)  # (T, 1)
+        quat_right = torch.from_numpy(action_right['quat'].astype(np.float32))
         rot6d_right = matrix_to_rotation_6d(quaternion_to_matrix(quat_right)).numpy()  # (T, 6)
-        stat_right = action_right['stat']
+        stat_right = action_right['stat'].astype(np.float32)
         assert pos_left.shape[0] == quat_left.shape[0] == stat_left.shape[0]
 
         rot6d = np.concatenate((rot6d_left, rot6d_right), axis=1)  # (T, 8)
-        stat = np.concatenate((stat_left, stat_right), axis=1)  # (T, 2)
+        stat = np.concatenate((np.expand_dims(stat_left, axis=1), np.expand_dims(stat_right, axis=1)), axis=1)  # (T, 2)
         act = np.concatenate((pos, rot6d, stat), axis=1)  # (T, 16)
-        padding = act[0, ...].repeat(self.cond_length-1, 1)   # (cond_length-1, 16)
+        padding = act[0:1, ...].repeat(self.cond_length-1, 0)   # (cond_length-1, 16)
+
         padded_act = np.concatenate((padding, act), axis=0)
-        total_length = len(padded_act.shape[0])  # (T+cond_length-1, 16)
+        total_length = padded_act.shape[0]  # (T+cond_length-1, 16)
 
         actions = []
         labels = []
@@ -102,12 +102,13 @@ class Action_Dataset(Dataset):
             temp_cond = padded_act[i:i+self.cond_length, ...]
             temp_action = padded_act[i+self.cond_length:i+self.cond_length+self.clip_length, ...]
             if i is not total_length-self.clip_length-self.cond_length:
-                stop_token = numpy.zeros_like(padded_act[0, ...])
-                temp_action = numpy.concatenate((temp_action, stop_token), axis=0)
+                stop_token = np.zeros_like(padded_act[0:1, ...])
+                temp_action = np.concatenate((temp_action, stop_token), axis=0)
             else:
-                stop_token = numpy.ones_like(padded_act[0, ...])
-                temp_action = numpy.concatenate((temp_action, stop_token), axis=0)
-            temp_label = label
+                stop_token = np.ones_like(padded_act[0:1, ...])
+                temp_action = np.concatenate((temp_action, stop_token), axis=0)
+            # temp_label = label
+            temp_label = 1
             actions.append(temp_action)
             cond_acts.append(temp_cond)
             labels.append(temp_label)

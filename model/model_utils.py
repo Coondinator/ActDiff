@@ -14,10 +14,10 @@ def build_cond_encoder(config):
 
 
 def build_denoiser(config):
-    if config.denoiser == 'transformer':
+    if config.denoiser == 'CIT':
         module = TransformerModel(act_dim=config.act_dim,
                                   con_dim=config.cond_dim,
-                                  nhead=config.denoiser_nhead,
+                                  nhead=config.head_num,
                                   hid_dim=config.hid_dim,
                                   nlayers=config.nlayers,
                                   dropout=config.dropout)

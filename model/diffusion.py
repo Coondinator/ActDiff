@@ -14,8 +14,7 @@ class ActDiff(nn.Module):
         super().__init__()
 
         self.seed = args.seed
-        self.latent_size = args.latent_size
-        self.latent_channel = args.latent_channel
+        # self.latent_channel = args.latent_channel
 
         self.denoiser_model = build_denoiser(args)
         '''
@@ -61,7 +60,7 @@ class ActDiff(nn.Module):
         loss = self.p_losses(x_start=x, t=t, cond_act=cond_act, label=label, noise=noise)
         return loss
 
-    def p_losses(self, x_start, t, mask, cond_act=None, cond_extra=None, label=None, noise=None):
+    def p_losses(self, x_start, t, cond_act=None, cond_extra=None, label=None, noise=None, mask=None):
         if noise is None:
             noise = torch.randn_like(x_start)
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)

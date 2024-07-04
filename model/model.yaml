@@ -1,4 +1,11 @@
 # add your model configuration here
+seed: 2
+
+train_mode: x_start
+loss_type: l1
+timesteps: 1000
+denoiser: CIT
+
 clip_length: 32
 cond_length: 32
 img_length: 3
@@ -7,6 +14,7 @@ image_cond: False
 
 act_dim: 20
 head_num: 20
+cond_dim: 20
 hid_dim: 20
 nlayers: 4
 dropout: 0.1
